@@ -115,7 +115,6 @@ def guardar_parqueos(ruta: str, lotes_estado) -> None:
     if MODO_DEMO:
         return
 
-    tmp = NamedTemporaryFile("w", delete=False, newline="", encoding="utf-8")
     fieldnames = [
         "lot_id",
         "nombre",
@@ -128,11 +127,12 @@ def guardar_parqueos(ruta: str, lotes_estado) -> None:
         "permite_espera",
     ]
 
-    with tmp:
-        writer = csv.DictWriter(tmp, fieldnames=fieldnames)
+    # Abrimos directamente el CSV de parqueos en modo escritura
+    with open(ruta, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
 
-        # lotes_estado puede venir como LISTA de dicts o LISTA de listas/tuplas
+        # lotes_estado puede venir como LISTA de dicts o de listas/tuplas
         for lot in lotes_estado:
             # Caso 1: diccionario normal
             if isinstance(lot, dict):
@@ -148,30 +148,31 @@ def guardar_parqueos(ruta: str, lotes_estado) -> None:
 
             # Caso 2: lista / tupla en orden
             elif isinstance(lot, (list, tuple)):
-                # Esperamos el orden:
+                # Orden esperado:
                 # [lot_id, nombre, capacidad, ocupados, libres, activo, apertura, cierre, permite_espera]
-                values = list(lot) + [None] * 9  # rellenar por si vienen menos
+                values = list(lot) + [None] * 9
                 lot_id, nombre, capacidad, ocupados, libres, activo, apertura, cierre, permite_espera = values[:9]
             else:
-                # Formato raro, lo ignoramos para no romper todo
+                # Formato inesperado → lo ignoramos
                 continue
 
-            # Normalizamos tipos
+            # Normalizamos tipos numéricos
             try:
-                capacidad = int(capacidad) if capacidad is not None and capacidad != "" else 0
+                capacidad = int(capacidad) if capacidad not in (None, "") else 0
             except Exception:
                 capacidad = 0
 
             try:
-                ocupados = int(ocupados) if ocupados is not None and ocupados != "" else 0
+                ocupados = int(ocupados) if ocupados not in (None, "") else 0
             except Exception:
                 ocupados = 0
 
             try:
-                libres = int(libres) if libres is not None and libres != "" else 0
+                libres = int(libres) if libres not in (None, "") else 0
             except Exception:
                 libres = 0
 
+            # Normalizamos booleans
             def _to_bool(x, default=True):
                 if isinstance(x, bool):
                     return x
@@ -196,11 +197,6 @@ def guardar_parqueos(ruta: str, lotes_estado) -> None:
                 "cierre": cierre or "",
                 "permite_espera": int(permite_espera),
             })
-
-    os.replace(tmp.name, ruta)
-
-
-
 
 def leer_eventos(ruta: str) -> pd.DataFrame:
     if not os.path.exists(ruta):
@@ -889,6 +885,7 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
 
