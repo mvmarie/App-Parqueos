@@ -320,12 +320,18 @@ def tiene_checkin(df: pd.DataFrame, booking_id: str) -> bool:
 def expirar_vencidas(df: pd.DataFrame, ahora: datetime, ruta_eventos: str) -> None:
     if df.empty:
         return
+
     ok_res = (df["accion"] == "reserva") & (df["success"] == 1)
     ok_can = (df["accion"] == "cancelacion") & (df["success"] == 1)
-    activos = df[ok_res & (~df["booking_id"].isin(ok_can["booking_id"]))].copy()
+
+    # 👉 aquí va el cambio importante
+    activos = df[ok_res & (~df["booking_id"].isin(df[ok_can]["booking_id"]))].copy()
+
     vencidas = activos.dropna(subset=["slot_end"])
     vencidas = vencidas[vencidas["slot_end"] < ahora]
+
     ya_fin = set(df[df["accion"].isin(["expiracion", "cierrejornada", "no_show"])]["booking_id"])
+
     for _, r in vencidas.iterrows():
         bid = r["booking_id"]
         if not bid or bid in ya_fin:
@@ -346,6 +352,7 @@ def expirar_vencidas(df: pd.DataFrame, ahora: datetime, ruta_eventos: str) -> No
             origen="system",
             version="v2"
         )
+
 
 def cerrar_jornada(df: pd.DataFrame, ahora: datetime, ruta_eventos: str) -> int:
     activos = reservas_activas(df, ahora)
@@ -874,3 +881,4 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
