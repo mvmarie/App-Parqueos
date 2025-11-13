@@ -133,37 +133,33 @@ def guardar_parqueos(ruta, lotes_estado):
 
 
 def leer_eventos(ruta: str) -> pd.DataFrame:
-def registrar_evento(
-    ruta_eventos: str,
-    user_email: str, accion: str, motivo: str,
-    lot_id: str, booking_id: str,
-    exito: bool, libres_despues: int, capacidad: int,
-    slot_start: Optional[datetime] = None,
-    slot_end:   Optional[datetime] = None,
-    origen: str = "ui",
-    version: str = "v2",
-    codigo_error: str = ""
-) -> None:
-    asegurar_csv_eventos(ruta_eventos)
+    if not os.path.exists(ruta):
+        return pd.DataFrame(columns=EVENT_HEADERS)
 
-    fila = {
-        "event_id": str(uuid.uuid4()),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "user_email": user_email,
-        "accion": accion,
-        "motivo": motivo,
-        "lot_id": lot_id,
-        "spot_id": "",
-        "booking_id": booking_id,
-        "success": "1" if exito else "0",
-        "free_spots_after": str(libres_despues),
-        "capacity": str(capacidad),
-        "source": origen,
-        "app_version": version,
-        "error_code": codigo_error,
-        "slot_start": slot_start.isoformat() if slot_start else "",
-        "slot_end":   slot_end.isoformat()   if slot_end else ""
-    }
+    df = pd.read_csv(ruta, dtype=str)
+
+    # Columns to convert to numeric
+    for c in ["success", "free_spots_after", "capacity"]:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    # Convert timestamps
+    for c in ["timestamp", "slot_start", "slot_end"]:
+        if c in df.columns:
+            df[c] = pd.to_datetime(df[c], errors="coerce", utc=True)
+
+    # Auto-add fecha y hora
+    if "timestamp" in df.columns:
+        df["fecha"] = df["timestamp"].dt.date
+        df["hora"] = df["timestamp"].dt.hour
+
+    # Clean text fields
+    for c in ["accion", "motivo", "lot_id", "user_email", "booking_id", "error_code"]:
+        if c in df.columns:
+            df[c] = df[c].fillna("").str.strip()
+
+    return df
+
 
     if acquire_lock(LOCK_FILE):
         try:
@@ -176,15 +172,6 @@ def registrar_evento(
         finally:
             release_lock(LOCK_FILE)
 
-def registrar_evento(
-    ruta_eventos: str,
-    user_email: str, accion: str, motivo: str,
-    lot_id: str, booking_id: str,
-    exito: bool, libres_despues: int, capacidad: int,
-    slot_start: Optional[datetime] = None,
-    slot_end:   Optional[datetime] = None,
-    origen: str = "ui", version: str = "v2", codigo_error: str = ""
-) -> None:
     asegurar_csv_eventos(ruta_eventos)
     fila = {
         "event_id": str(uuid.uuid4()),
@@ -826,5 +813,6 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
