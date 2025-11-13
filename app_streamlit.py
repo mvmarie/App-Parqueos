@@ -1,22 +1,37 @@
-import os, csv, uuid, tempfile, time
+import os, csv, uuid, time
 from datetime import datetime, date, time as dtime, timedelta, timezone
 from typing import List, Dict, Optional
-from tempfile import NamedTemporaryFile
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 
-#Al estar en la nube es necesario para que los CSV funcionen
 MODO_DEMO = False
 
 # ---------- Parámetros ----------
 PARQUEOS_CSV = "Parqueos.csv"
 EVENTOS_CSV  = "Eventos.csv"
 USUARIOS_CSV = "Usuarios.csv"
-LOCK_FILE    = ".parqueos.lock"     
-ADMIN_CODE   = "UVG-2025"          
-AUTO_CLOSE_ON_START = False          
+LOCK_FILE    = ".parqueos.lock"
+ADMIN_CODE   = "UVG-2025"
+
+# ---------------------------------------------------------------------
+# Helper de zona horaria: convierte fecha+hora (local) a datetime en UTC
+# ---------------------------------------------------------------------
+def to_utc(fecha: date, hora: dtime) -> datetime:
+    """
+    Toma la fecha y hora que el usuario elige en la UI (naive)
+    y las convierte a UTC respetando la zona horaria local del servidor.
+    Así las reservas NO quedan "en el pasado" por error de tz.
+    """
+    naive = datetime.combine(fecha, hora)
+    try:
+        local_tz = datetime.now().astimezone().tzinfo or timezone.utc
+        local_dt = naive.replace(tzinfo=local_tz)
+        return local_dt.astimezone(timezone.utc)
+    except Exception:
+        # fallback seguro
+        return naive.replace(tzinfo=timezone.utc)
 
 # ---------- Config UI ----------
 st.set_page_config(page_title="Parqueos UVG — App", layout="wide")
@@ -127,14 +142,11 @@ def guardar_parqueos(ruta: str, lotes_estado) -> None:
         "permite_espera",
     ]
 
-    # Abrimos directamente el CSV de parqueos en modo escritura
     with open(ruta, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
 
-        # lotes_estado puede venir como LISTA de dicts o de listas/tuplas
         for lot in lotes_estado:
-            # Caso 1: diccionario normal
             if isinstance(lot, dict):
                 lot_id         = str(lot.get("lot_id", ""))
                 nombre         = lot.get("nombre", "")
@@ -145,34 +157,23 @@ def guardar_parqueos(ruta: str, lotes_estado) -> None:
                 apertura       = lot.get("apertura", "")
                 cierre         = lot.get("cierre", "")
                 permite_espera = lot.get("permite_espera", True)
-
-            # Caso 2: lista / tupla en orden
             elif isinstance(lot, (list, tuple)):
-                # Orden esperado:
-                # [lot_id, nombre, capacidad, ocupados, libres, activo, apertura, cierre, permite_espera]
                 values = list(lot) + [None] * 9
                 lot_id, nombre, capacidad, ocupados, libres, activo, apertura, cierre, permite_espera = values[:9]
             else:
-                # Formato inesperado → lo ignoramos
                 continue
 
-            # Normalizamos tipos numéricos
-            try:
-                capacidad = int(capacidad) if capacidad not in (None, "") else 0
-            except Exception:
-                capacidad = 0
+            # Normalizar tipos
+            def as_int(x, default=0):
+                try:
+                    return int(x) if x not in (None, "") else default
+                except Exception:
+                    return default
 
-            try:
-                ocupados = int(ocupados) if ocupados not in (None, "") else 0
-            except Exception:
-                ocupados = 0
+            capacidad = as_int(capacidad)
+            ocupados  = as_int(ocupados)
+            libres    = as_int(libres)
 
-            try:
-                libres = int(libres) if libres not in (None, "") else 0
-            except Exception:
-                libres = 0
-
-            # Normalizamos booleans
             def _to_bool(x, default=True):
                 if isinstance(x, bool):
                     return x
@@ -204,27 +205,24 @@ def leer_eventos(ruta: str) -> pd.DataFrame:
 
     df = pd.read_csv(ruta, dtype=str)
 
-    # Columns to convert to numeric
     for c in ["success", "free_spots_after", "capacity"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # Convert timestamps
     for c in ["timestamp", "slot_start", "slot_end"]:
         if c in df.columns:
             df[c] = pd.to_datetime(df[c], errors="coerce", utc=True)
 
-    # Auto-add fecha y hora
     if "timestamp" in df.columns:
         df["fecha"] = df["timestamp"].dt.date
         df["hora"] = df["timestamp"].dt.hour
 
-    # Clean text fields
     for c in ["accion", "motivo", "lot_id", "user_email", "booking_id", "error_code"]:
         if c in df.columns:
             df[c] = df[c].fillna("").str.strip()
 
     return df
+
 def registrar_evento(
     ruta_eventos: str,
     user_email: str, accion: str, motivo: str,
@@ -236,7 +234,6 @@ def registrar_evento(
     version: str = "v2",
     codigo_error: str = ""
 ) -> None:
-    # En modo demo (nube) no escribir CSV
     if MODO_DEMO:
         return
 
@@ -325,7 +322,7 @@ def expirar_vencidas(df: pd.DataFrame, ahora: datetime, ruta_eventos: str) -> No
         return
     ok_res = (df["accion"] == "reserva") & (df["success"] == 1)
     ok_can = (df["accion"] == "cancelacion") & (df["success"] == 1)
-    activos = df[ok_res & (~df["booking_id"].isin(df[ok_can]["booking_id"]))].copy()
+    activos = df[ok_res & (~df["booking_id"].isin(ok_can["booking_id"]))].copy()
     vencidas = activos.dropna(subset=["slot_end"])
     vencidas = vencidas[vencidas["slot_end"] < ahora]
     ya_fin = set(df[df["accion"].isin(["expiracion", "cierrejornada", "no_show"])]["booking_id"])
@@ -444,7 +441,7 @@ def generar_reporte_html(
     html += "<h1>Reporte de uso de parqueos</h1>"
     html += f"<p>Rango de fechas analizado: <b>{f_ini}</b> a <b>{f_fin}</b>.</p>"
     html += "<h2>Resumen general</h2>"
-    html += f"<ul>"
+    html += "<ul>"
     html += f"<li>Total de reservas: <b>{total_res}</b></li>"
     html += f"<li>Tasa de éxito: <b>{exito:.2f}%</b></li>"
     html += f"<li>Ocupación promedio (estimada): <b>{ocup:.2f}%</b></li>"
@@ -468,6 +465,7 @@ lotes = cargar_parqueos(PARQUEOS_CSV)
 
 usuario = auth_ui()
 st.title("🚗 Parqueos UVG — Horarios y Reservas")
+
 if not lotes:
     st.error("No se encontró **Parqueos.csv**.")
     st.stop()
@@ -480,17 +478,11 @@ st.caption(f"Sesión: **{usuario['email']}** — Rol: **{usuario['role']}**")
 df_all = leer_eventos(EVENTOS_CSV)
 ahora = datetime.now(timezone.utc)
 
-# 1) Expirar vencidas por slot_end < ahora 
+# 1) Expirar vencidas por slot_end < ahora
 expirar_vencidas(df_all, ahora, EVENTOS_CSV)
 df_all = leer_eventos(EVENTOS_CSV)
 
-# 2) Opcional: cerrar jornada al iniciar 
-if AUTO_CLOSE_ON_START:
-    cerradas = cerrar_jornada(df_all, ahora, EVENTOS_CSV)
-    if cerradas:
-        df_all = leer_eventos(EVENTOS_CSV)
-
-# ---------- Tabs  ----------
+# ---------- Tabs ----------
 tabs = ["Estado", "Reservar", "Check-in", "Cancelar", "Análisis"]
 if usuario["role"] == "admin":
     tabs.append("Admin")
@@ -506,7 +498,8 @@ with estado_tab:
         fecha_ref = st.date_input("Fecha de referencia", value=date.today())
     with colt2:
         hora_ref = st.time_input("Hora de referencia", value=dtime(hour=ahora.hour, minute=0))
-    ref_dt = datetime.combine(fecha_ref, hora_ref).replace(tzinfo=timezone.utc)
+    ref_dt = to_utc(fecha_ref, hora_ref)
+
     lotes_estado = recalcular_ocupacion_desde_eventos(lotes, df_all, ref_dt)
     df_estado = pd.DataFrame(
         [{"Parqueo": l[0], "Capacidad": l[1], "Ocupados": l[2], "Libres": max(l[1] - l[2], 0)} for l in lotes_estado]
@@ -524,7 +517,7 @@ with reservar_tab:
         fecha = st.date_input("Fecha", value=date.today(), key="res_fecha")
         hora  = st.time_input(
             "Hora de inicio",
-            value=dtime(hour=max(ahora.hour, 7), minute=0),
+            value=dtime(hour=max(ahora.astimezone().hour, 7), minute=0),
             key="res_hora"
         )
     with col3:
@@ -532,9 +525,9 @@ with reservar_tab:
     motivo = st.selectbox("Motivo", ["clase", "examen", "visita", "reunión", "actividad", "charla DELVA", "otro"])
 
     if st.button("Reservar"):
-        start_dt = datetime.combine(fecha, hora).replace(tzinfo=timezone.utc)
+        start_dt = to_utc(fecha, hora)
         end_dt   = start_dt + timedelta(minutes=int(dur_min))
-        # Chequeo de traslape
+
         if hay_traslape(df_all, lote_sel, start_dt, end_dt):
             capacidad_lote = 0
             for l in lotes:
@@ -711,129 +704,125 @@ with analisis_tab:
     df_eventos = leer_eventos(EVENTOS_CSV)
     if df_eventos.empty:
         st.info("Aún no hay eventos.")
-        st.stop()
+    else:
+        colf1, colf2, colf3 = st.columns(3)
+        fechas = sorted([d for d in df_eventos["fecha"].dropna().unique()])
+        with colf1:
+            f_ini = st.date_input("Fecha inicial", value=min(fechas) if fechas else date.today())
+        with colf2:
+            f_fin = st.date_input("Fecha final", value=max(fechas) if fechas else date.today())
+        with colf3:
+            motivos = st.multiselect(
+                "Motivos",
+                options=sorted(df_eventos["motivo"].dropna().unique()),
+                default=[]
+            )
 
-    colf1, colf2, colf3 = st.columns(3)
-    fechas = sorted([d for d in df_eventos["fecha"].dropna().unique()])
-    with colf1:
-        f_ini = st.date_input("Fecha inicial", value=min(fechas) if fechas else date.today())
-    with colf2:
-        f_fin = st.date_input("Fecha final", value=max(fechas) if fechas else date.today())
-    with colf3:
-        motivos = st.multiselect(
-            "Motivos",
-            options=sorted(df_eventos["motivo"].dropna().unique()),
-            default=[]
-        )
+        dff = df_eventos.copy()
+        dff = dff[(dff["fecha"] >= f_ini) & (dff["fecha"] <= f_fin)]
+        if motivos:
+            dff = dff[dff["motivo"].isin(motivos)]
 
-    dff = df_eventos.copy()
-    dff = dff[(dff["fecha"] >= f_ini) & (dff["fecha"] <= f_fin)]
-    if motivos:
-        dff = dff[dff["motivo"].isin(motivos)]
+        reservas = dff[dff["accion"] == "reserva"]
 
-    reservas = dff[dff["accion"] == "reserva"]
+        m1, m2, m3 = st.columns(3)
+        total_res = int(len(reservas))
+        exito = float(round((reservas["success"] == 1).mean() * 100, 2)) if len(reservas) else 0.0
+        ocup = 0.0
+        if {"free_spots_after", "capacity"}.issubset(dff.columns) and len(
+            dff.dropna(subset=["free_spots_after", "capacity"])
+        ) > 0:
+            occ = 1 - (dff["free_spots_after"] / dff["capacity"])
+            ocup = float(round(occ.mean() * 100, 2))
+        m1.metric("Reservas (total)", total_res)
+        m2.metric("Tasa de éxito (%)", exito)
+        m3.metric("Ocupación promedio (%)", ocup)
 
-    m1, m2, m3 = st.columns(3)
-    total_res = int(len(reservas))
-    exito = float(round((reservas["success"] == 1).mean() * 100, 2)) if len(reservas) else 0.0
-    ocup = 0.0
-    if {"free_spots_after", "capacity"}.issubset(dff.columns) and len(
-        dff.dropna(subset=["free_spots_after", "capacity"])
-    ) > 0:
-        occ = 1 - (dff["free_spots_after"] / dff["capacity"])
-        ocup = float(round(occ.mean() * 100, 2))
-    m1.metric("Reservas (total)", total_res)
-    m2.metric("Tasa de éxito (%)", exito)
-    m3.metric("Ocupación promedio (%)", ocup)
+        c1, c2 = st.columns(2)
+        with c1:
+            serie = dff["accion"].value_counts()
+            fig, ax = plt.subplots()
+            if len(serie) == 0:
+                ax.set_title("Frecuencia de acciones (sin datos)")
+            else:
+                serie.plot(kind="bar", ax=ax)
+                ax.set_title("Frecuencia de acciones")
+                ax.set_xlabel("Acción")
+                ax.set_ylabel("Cantidad")
+            st.pyplot(fig)
 
-    c1, c2 = st.columns(2)
-    with c1:
-        serie = dff["accion"].value_counts()
+        with c2:
+            fig, ax = plt.subplots()
+            r_ok = int((reservas["success"] == 1).sum())
+            r_bad = int((reservas["success"] == 0).sum())
+            if r_ok + r_bad == 0:
+                ax.set_title("Éxito vs. fallo (sin datos)")
+            else:
+                ax.pie([r_ok, r_bad], labels=["Éxito", "Fallo"], autopct="%1.1f%%")
+                ax.set_title("Éxito vs. fallo en reservas")
+            st.pyplot(fig)
+
+        c3, c4 = st.columns(2)
+        with c3:
+            serie = reservas.groupby("fecha").size() if len(reservas) else pd.Series(dtype=int)
+            fig, ax = plt.subplots()
+            if len(serie) == 0:
+                ax.set_title("Reservas por día (sin datos)")
+            else:
+                serie.plot(kind="line", ax=ax)
+                ax.set_title("Reservas por día")
+                ax.set_xlabel("Fecha")
+                ax.set_ylabel("Nº")
+            st.pyplot(fig)
+
+        with c4:
+            vals = dff["hora"].dropna()
+            fig, ax = plt.subplots()
+            if len(vals) == 0:
+                ax.set_title("Distribución por hora (sin datos)")
+            else:
+                ax.hist(vals, bins=24, range=(0, 24))
+                ax.set_title("Distribución por hora")
+                ax.set_xlabel("Hora")
+                ax.set_ylabel("Frecuencia")
+            st.pyplot(fig)
+
+        serie_lotes = reservas["lot_id"].value_counts()
         fig, ax = plt.subplots()
-        if len(serie) == 0:
-            ax.set_title("Frecuencia de acciones (sin datos)")
+        if len(serie_lotes) == 0:
+            ax.set_title("Reservas por lote (sin datos)")
         else:
-            serie.plot(kind="bar", ax=ax)
-            ax.set_title("Frecuencia de acciones")
-            ax.set_xlabel("Acción")
-            ax.set_ylabel("Cantidad")
-        st.pyplot(fig)
-
-    with c2:
-        fig, ax = plt.subplots()
-        r_ok = int((reservas["success"] == 1).sum())
-        r_bad = int((reservas["success"] == 0).sum())
-        if r_ok + r_bad == 0:
-            ax.set_title("Éxito vs. fallo (sin datos)")
-        else:
-            ax.pie([r_ok, r_bad], labels=["Éxito", "Fallo"], autopct="%1.1f%%")
-            ax.set_title("Éxito vs. fallo en reservas")
-        st.pyplot(fig)
-
-    c3, c4 = st.columns(2)
-    with c3:
-        serie = reservas.groupby("fecha").size() if len(reservas) else pd.Series(dtype=int)
-        fig, ax = plt.subplots()
-        if len(serie) == 0:
-            ax.set_title("Reservas por día (sin datos)")
-        else:
-            serie.plot(kind="line", ax=ax)
-            ax.set_title("Reservas por día")
-            ax.set_xlabel("Fecha")
+            serie_lotes.plot(kind="bar", ax=ax)
+            ax.set_title("Reservas por lote")
+            ax.set_xlabel("Lote")
             ax.set_ylabel("Nº")
         st.pyplot(fig)
 
-    with c4:
-        vals = dff["hora"].dropna()
-        fig, ax = plt.subplots()
-        if len(vals) == 0:
-            ax.set_title("Distribución por hora (sin datos)")
+        st.subheader("Solicitudes en lista de espera")
+        df_wait = dff[dff["accion"] == "lista_espera"].copy()
+        if df_wait.empty:
+            st.caption("No hay registros en lista de espera en el rango seleccionado.")
         else:
-            ax.hist(vals, bins=24, range=(0, 24))
-            ax.set_title("Distribución por hora")
-            ax.set_xlabel("Hora")
-            ax.set_ylabel("Frecuencia")
-        st.pyplot(fig)
+            cols = ["user_email", "lot_id", "motivo", "slot_start", "slot_end", "error_code"]
+            for c in cols:
+                if c not in df_wait.columns:
+                    df_wait[c] = ""
+            df_wait = df_wait[cols].copy()
+            if "slot_start" in df_wait.columns:
+                df_wait["slot_start"] = df_wait["slot_start"].dt.tz_convert(None)
+            if "slot_end" in df_wait.columns:
+                df_wait["slot_end"] = df_wait["slot_end"].dt.tz_convert(None)
+            st.dataframe(df_wait, use_container_width=True)
 
-    serie_lotes = reservas["lot_id"].value_counts()
-    fig, ax = plt.subplots()
-    if len(serie_lotes) == 0:
-        ax.set_title("Reservas por lote (sin datos)")
-    else:
-        serie_lotes.plot(kind="bar", ax=ax)
-        ax.set_title("Reservas por lote")
-        ax.set_xlabel("Lote")
-        ax.set_ylabel("Nº")
-    st.pyplot(fig)
+        reporte_html = generar_reporte_html(dff, reservas, total_res, exito, ocup, f_ini, f_fin)
+        st.download_button(
+            "Descargar reporte (HTML)",
+            data=reporte_html.encode("utf-8"),
+            file_name="reporte_parqueos.html",
+            mime="text/html"
+        )
 
-    # ---- Lista de espera  ----
-    st.subheader("Solicitudes en lista de espera")
-    df_wait = dff[dff["accion"] == "lista_espera"].copy()
-    if df_wait.empty:
-        st.caption("No hay registros en lista de espera en el rango seleccionado.")
-    else:
-        cols = ["user_email", "lot_id", "motivo", "slot_start", "slot_end", "error_code"]
-        for c in cols:
-            if c not in df_wait.columns:
-                df_wait[c] = ""
-        df_wait = df_wait[cols].copy()
-        if "slot_start" in df_wait.columns:
-            df_wait["slot_start"] = df_wait["slot_start"].dt.tz_convert(None)
-        if "slot_end" in df_wait.columns:
-            df_wait["slot_end"] = df_wait["slot_end"].dt.tz_convert(None)
-        st.dataframe(df_wait, use_container_width=True)
-
-    # ---- Botón de descarga de reporte ----
-    reporte_html = generar_reporte_html(dff, reservas, total_res, exito, ocup, f_ini, f_fin)
-    st.download_button(
-        "Descargar reporte (HTML)",
-        data=reporte_html.encode("utf-8"),
-        file_name="reporte_parqueos.html",
-        mime="text/html"
-    )
-
-# ----- Admin  -----
-# ----- Admin (solo rol admin) -----
+# ----- Admin -----
 if admin_tab is not None:
     with admin_tab:
         st.subheader("Panel de Administración")
@@ -842,8 +831,8 @@ if admin_tab is not None:
         with colA:
             fecha_ref = st.date_input("Fecha ref.", value=date.today(), key="adm_f")
         with colB:
-            hora_ref = st.time_input("Hora ref.", value=dtime(hour=ahora.hour, minute=0), key="adm_h")
-        ref_dt = datetime.combine(fecha_ref, hora_ref).replace(tzinfo=timezone.utc)
+            hora_ref = st.time_input("Hora ref.", value=dtime(hour=ahora.astimezone().hour, minute=0), key="adm_h")
+        ref_dt = to_utc(fecha_ref, hora_ref)
 
         df_now = reservas_activas(df_all, ref_dt).copy()
         if not df_now.empty:
@@ -885,22 +874,3 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
