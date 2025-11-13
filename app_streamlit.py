@@ -159,18 +159,20 @@ def leer_eventos(ruta: str) -> pd.DataFrame:
             df[c] = df[c].fillna("").str.strip()
 
     return df
-
-
-    if acquire_lock(LOCK_FILE):
-        try:
-            write_header = not os.path.exists(ruta_eventos) or os.stat(ruta_eventos).st_size == 0
-            with open(ruta_eventos, "a", newline="", encoding="utf-8") as f:
-                w = csv.DictWriter(f, fieldnames=EVENT_HEADERS)
-                if write_header:
-                    w.writeheader()
-                w.writerow(fila)
-        finally:
-            release_lock(LOCK_FILE)
+  def registrar_evento(
+    ruta_eventos: str,
+    user_email: str, accion: str, motivo: str,
+    lot_id: str, booking_id: str,
+    exito: bool, libres_despues: int, capacidad: int,
+    slot_start: Optional[datetime] = None,
+    slot_end:   Optional[datetime] = None,
+    origen: str = "ui",
+    version: str = "v2",
+    codigo_error: str = ""
+) -> None:
+    # En modo demo (nube) no escribir CSV
+    if MODO_DEMO:
+        return
 
     asegurar_csv_eventos(ruta_eventos)
     fila = {
@@ -191,9 +193,13 @@ def leer_eventos(ruta: str) -> pd.DataFrame:
         "slot_start": slot_start.isoformat() if slot_start else "",
         "slot_end":   slot_end.isoformat()   if slot_end   else ""
     }
+
     if acquire_lock(LOCK_FILE):
         try:
-            write_header = not os.path.exists(ruta_eventos) or os.stat(ruta_eventos).st_size == 0
+            write_header = (
+                not os.path.exists(ruta_eventos)
+                or os.stat(ruta_eventos).st_size == 0
+            )
             with open(ruta_eventos, "a", newline="", encoding="utf-8") as f:
                 w = csv.DictWriter(f, fieldnames=EVENT_HEADERS)
                 if write_header:
@@ -813,6 +819,7 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
 
