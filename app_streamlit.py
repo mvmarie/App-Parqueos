@@ -144,7 +144,7 @@ def guardar_parqueos(ruta: str, lotes_estado) -> None:
               "activo": int(lot.get("activo", True)),
               "apertura": lot.get("apertura", ""),
               "cierre": lot.get("cierre", ""),
-            "permite_espera": int(lot.get("permite_espera", True)),
+              "permite_espera": int(lot.get("permite_espera", True)),
     })
 
 os.replace(tmp.name, ruta)
@@ -837,6 +837,7 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
 
