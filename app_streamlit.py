@@ -6,6 +6,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 
+#Al estar en la nube es necesario para que los CSV funcionen
+MODO_DEMO = True  
+
 # ---------- Parámetros ----------
 PARQUEOS_CSV = "Parqueos.csv"
 EVENTOS_CSV  = "Eventos.csv"
@@ -107,14 +110,33 @@ def cargar_parqueos(ruta: str) -> List[List]:
                 continue
     return lotes
 
-def guardar_parqueos(ruta: str, lotes: List[List]) -> None:
-    tmp = tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8")
-    with tmp as f:
-        for nombre, cap, ocup in lotes:
-            f.write(f"{nombre},{int(cap)},{int(ocup)}\n")
+def guardar_parqueos(ruta, lotes_estado):
+    """Guarda el estado de los parqueos en CSV (solo si no estamos en modo demo)."""
+    if MODO_DEMO:
+        # En Streamlit Cloud el sistema de archivos es de solo lectura para el repo.
+        # Usamos los datos solo en memoria y no intentamos escribir.
+        return
+    campos = ["lot_id", "nombre", "capacidad"]
+    tmp = NamedTemporaryFile("w", delete=False, newline="", encoding="utf-8")
+    with tmp:
+        writer = csv.DictWriter(tmp, fieldnames=campos)
+        writer.writeheader()
+        for lot in lotes_estado:
+            writer.writerow(
+                {
+                    "lot_id": lot["lot_id"],
+                    "nombre": lot["nombre"],
+                    "capacidad": lot["capacidad"],
+                }
+            )
     os.replace(tmp.name, ruta)
 
+
 def leer_eventos(ruta: str) -> pd.DataFrame:
+  def registrar_evento(...):
+    if MODO_DEMO:
+        # En modo demo (Streamlit Cloud) no escribimos el CSV
+        return
     if not os.path.exists(ruta):
         return pd.DataFrame(columns=EVENT_HEADERS)
     df = pd.read_csv(ruta, dtype=str)
@@ -782,3 +804,4 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
