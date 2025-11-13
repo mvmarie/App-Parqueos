@@ -132,19 +132,19 @@ def guardar_parqueos(ruta: str, lotes_estado) -> None:
         writer = csv.DictWriter(tmp, fieldnames=fieldnames)
         writer.writeheader()
 
-        for lot in lotes_estado:
-    lot_id = str(lot.get("lot_id", ""))
+      for lot in lotes_estado:
+          lot_id = str(lot.get("lot_id", ""))
 
-    writer.writerow({
-        "lot_id": lot_id,
-        "nombre": lot.get("nombre", ""),
-        "capacidad": lot.get("capacidad", 0),
-        "ocupados": lot.get("ocupados", 0),
-        "libres": lot.get("libres", 0),
-        "activo": int(lot.get("activo", True)),
-        "apertura": lot.get("apertura", ""),
-        "cierre": lot.get("cierre", ""),
-        "permite_espera": int(lot.get("permite_espera", True)),
+          writer.writerow({
+              "lot_id": lot_id,
+              "nombre": lot.get("nombre", ""),
+              "capacidad": lot.get("capacidad", 0),
+              "ocupados": lot.get("ocupados", 0),
+              "libres": lot.get("libres", 0),
+              "activo": int(lot.get("activo", True)),
+              "apertura": lot.get("apertura", ""),
+              "cierre": lot.get("cierre", ""),
+            "permite_espera": int(lot.get("permite_espera", True)),
     })
 
 os.replace(tmp.name, ruta)
@@ -837,6 +837,7 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
 
