@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import streamlit as st
 
 #Al estar en la nube es necesario para que los CSV funcionen
-MODO_DEMO = os.environ.get("STREAMLIT_SERVER", "") == "cloud"
+MODO_DEMO = False
 
 # ---------- Parámetros ----------
 PARQUEOS_CSV = "Parqueos.csv"
@@ -820,6 +820,7 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
 
