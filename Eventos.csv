@@ -165,11 +165,13 @@ c5bd1be4-6cdf-4253-b402-4543206a5c5c,2025-11-10T01:19:28.916581+00:00,u_09,reser
 53c44b0d-1290-4b64-a7df-5feba47dcd7d,2025-11-10T01:19:28.939043+00:00,u_01,cancelacion,,El Hoyo (Parqueo 5 de la UVG),,,0,347,350,cli,v4,SIN_RESERVA_ACTIVA,,,
 fcaf1f2b-28f9-482b-9f64-aeafd0806df5,2025-11-10T01:19:28.939043+00:00,u_08,reserva,reunión,parqueo publico 2,,,0,30,35,cli,v4,YA_TIENE_ACTIVA,,,
 726ec86d-11a5-494c-b502-b738ad856c5f,2025-11-12T20:19:05.289455+00:00,mor23377@uvg.edu.gt,reserva,charla DELVA,El Hoyo (Parqueo 5 de la UVG),,786be93c-1be3-491f-8a3d-71d05cf322f6,1,346,350,ui,v1,,,,
-417723c6-9d05-4383-b3a8-e5d09f00d748,2025-11-12T20:19:12.674554+00:00,mor23377@uvg.edu.gt,cancelacion,,El Hoyo (Parqueo 5 de la UVG),,,0,346,350,ui,v1,SIN_RESERVA_ACTIVA,,,
+417723c6-9d05-4383-b3a8-e5d09f00d748,2025-11-12T20:19:12.674554+00:00,mor23377@uvg.edu.gt,cancelacion,,El Hoyo (Parqueo 5 de la UVG),,,0,346,350,ui,v1,SIN_RESERVA_ACTIVA,,
 a206169c-6f76-4de0-a61b-1baac3fd766c,2025-11-13T05:00:48.946102+00:00,danymroldan@gmail.com,reserva,charla DELVA,Parqueo San Martín,,bedc1825-c639-4632-9ece-83f651261784,1,69,70,ui,v2,,2025-11-14T07:15:00+00:00,2025-11-14T08:45:00+00:00
 c5c1f881-a895-4489-9722-4cf94976ca1b,2025-11-13T05:01:16.789101+00:00,danymroldan@gmail.com,reserva,charla DELVA,Parqueo San Martín,,374049a3-f096-4675-ae1e-9238eadaa12a,1,69,70,ui,v2,,2025-11-14T07:15:00+00:00,2025-11-14T08:45:00+00:00
 2d16e1d6-6a89-4e76-a6b8-6ac5badabb87,2025-11-13T05:01:17.619398+00:00,danymroldan@gmail.com,reserva,charla DELVA,Parqueo San Martín,,9648bd1d-17da-4a9f-a571-3ad39a965f91,1,69,70,ui,v2,,2025-11-14T07:15:00+00:00,2025-11-14T08:45:00+00:00
 4a468ffc-122a-433c-bf8e-a4b56cf0c504,2025-11-13T05:02:29.378346+00:00,danymroldan@gmail.com,reserva,clase,Parqueo San Martín,,193bc512-3651-4f2b-ad3a-56172ccf2303,1,69,70,ui,v2,,2025-11-14T07:15:00+00:00,2025-11-14T08:45:00+00:00
 787abbdf-6c9f-4ea1-b4fc-ce3a397288c8,2025-11-13T05:02:41.042851+00:00,danymroldan@gmail.com,cancelacion,,Parqueo San Martín,,,0,70,70,ui,v2,SIN_RESERVA_ACTIVA,,
 987f9535-ae61-4814-8172-04cbc47ac46d,2025-11-13T05:18:10.820777+00:00,danymroldan@gmail.com,reserva,charla DELVA,Parqueo San Martín,,ee4e0279-d426-4868-b3c5-ee171bad2ff4,1,69,70,ui,v2,,2025-11-14T09:00:00+00:00,2025-11-14T10:30:00+00:00
+
+
 
