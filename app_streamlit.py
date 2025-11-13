@@ -132,23 +132,73 @@ def guardar_parqueos(ruta: str, lotes_estado) -> None:
         writer = csv.DictWriter(tmp, fieldnames=fieldnames)
         writer.writeheader()
 
+        # lotes_estado puede venir como LISTA de dicts o LISTA de listas/tuplas
         for lot in lotes_estado:
-            lot_id = str(lot.get("lot_id", ""))
+            # Caso 1: diccionario normal
+            if isinstance(lot, dict):
+                lot_id         = str(lot.get("lot_id", ""))
+                nombre         = lot.get("nombre", "")
+                capacidad      = lot.get("capacidad", 0)
+                ocupados       = lot.get("ocupados", 0)
+                libres         = lot.get("libres", 0)
+                activo         = lot.get("activo", True)
+                apertura       = lot.get("apertura", "")
+                cierre         = lot.get("cierre", "")
+                permite_espera = lot.get("permite_espera", True)
+
+            # Caso 2: lista / tupla en orden
+            elif isinstance(lot, (list, tuple)):
+                # Esperamos el orden:
+                # [lot_id, nombre, capacidad, ocupados, libres, activo, apertura, cierre, permite_espera]
+                values = list(lot) + [None] * 9  # rellenar por si vienen menos
+                lot_id, nombre, capacidad, ocupados, libres, activo, apertura, cierre, permite_espera = values[:9]
+            else:
+                # Formato raro, lo ignoramos para no romper todo
+                continue
+
+            # Normalizamos tipos
+            try:
+                capacidad = int(capacidad) if capacidad is not None and capacidad != "" else 0
+            except Exception:
+                capacidad = 0
+
+            try:
+                ocupados = int(ocupados) if ocupados is not None and ocupados != "" else 0
+            except Exception:
+                ocupados = 0
+
+            try:
+                libres = int(libres) if libres is not None and libres != "" else 0
+            except Exception:
+                libres = 0
+
+            def _to_bool(x, default=True):
+                if isinstance(x, bool):
+                    return x
+                s = str(x).strip().lower()
+                if s in ("1", "true", "sí", "si"):
+                    return True
+                if s in ("0", "false", "no"):
+                    return False
+                return default
+
+            activo         = _to_bool(activo, True)
+            permite_espera = _to_bool(permite_espera, True)
 
             writer.writerow({
-                "lot_id": lot_id,
-                "nombre": lot.get("nombre", ""),
-                "capacidad": lot.get("capacidad", 0),
-                "ocupados": lot.get("ocupados", 0),
-                "libres": lot.get("libres", 0),
-                "activo": int(lot.get("activo", True)),
-                "apertura": lot.get("apertura", ""),
-                "cierre": lot.get("cierre", ""),
-                "permite_espera": int(lot.get("permite_espera", True)),
+                "lot_id": str(lot_id),
+                "nombre": nombre or "",
+                "capacidad": capacidad,
+                "ocupados": ocupados,
+                "libres": libres,
+                "activo": int(activo),
+                "apertura": apertura or "",
+                "cierre": cierre or "",
+                "permite_espera": int(permite_espera),
             })
 
-    
     os.replace(tmp.name, ruta)
+
 
 
 
@@ -839,6 +889,7 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
 
