@@ -111,25 +111,41 @@ def cargar_parqueos(ruta: str) -> List[List]:
                 continue
     return lotes
 
-def guardar_parqueos(ruta, lotes_estado):
-    """Guarda el estado de los parqueos en CSV (solo si no estamos en modo demo)."""
+def guardar_parqueos(ruta: str, lotes_estado) -> None:
     if MODO_DEMO:
-        # En Streamlit Cloud el sistema de archivos es de solo lectura para el repo.
-        # Usamos los datos solo en memoria y no intentamos escribir.
         return
-    campos = ["lot_id", "nombre", "capacidad"]
+
     tmp = NamedTemporaryFile("w", delete=False, newline="", encoding="utf-8")
+    fieldnames = [
+        "lot_id",
+        "nombre",
+        "capacidad",
+        "ocupados",
+        "libres",
+        "activo",
+        "apertura",
+        "cierre",
+        "permite_espera",
+    ]
+
     with tmp:
-        writer = csv.DictWriter(tmp, fieldnames=campos)
+        writer = csv.DictWriter(tmp, fieldnames=fieldnames)
         writer.writeheader()
-        for lot in lotes_estado:
-            writer.writerow(
-                {
-                    "lot_id": lot["lot_id"],
-                    "nombre": lot["nombre"],
-                    "capacidad": lot["capacidad"],
-                }
-            )
+
+        # Si lotes_estado es un dict tipo {id: {...}}
+        for lot_id, lot in lotes_estado.items():
+            writer.writerow({
+                "lot_id": lot_id,                              # 👈 AQUÍ EL CAMBIO
+                "nombre": lot.get("nombre", ""),
+                "capacidad": lot.get("capacidad", 0),
+                "ocupados": lot.get("ocupados", 0),
+                "libres": lot.get("libres", 0),
+                "activo": int(lot.get("activo", True)),
+                "apertura": lot.get("apertura", ""),
+                "cierre": lot.get("cierre", ""),
+                "permite_espera": int(lot.get("permite_espera", True)),
+            })
+
     os.replace(tmp.name, ruta)
 
 
@@ -820,6 +836,7 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
 
