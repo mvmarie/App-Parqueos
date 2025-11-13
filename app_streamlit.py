@@ -16,7 +16,7 @@ EVENTOS_CSV  = "Eventos.csv"
 USUARIOS_CSV = "Usuarios.csv"
 LOCK_FILE    = ".parqueos.lock"     
 ADMIN_CODE   = "UVG-2025"          
-AUTO_CLOSE_ON_START = True          
+AUTO_CLOSE_ON_START = False          
 
 # ---------- Config UI ----------
 st.set_page_config(page_title="Parqueos UVG — App", layout="wide")
@@ -885,6 +885,7 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
 
