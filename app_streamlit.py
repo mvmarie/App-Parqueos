@@ -132,7 +132,7 @@ def guardar_parqueos(ruta: str, lotes_estado) -> None:
         writer = csv.DictWriter(tmp, fieldnames=fieldnames)
         writer.writeheader()
 
-      for lot in lotes_estado:
+        for lot in lotes_estado:
           lot_id = str(lot.get("lot_id", ""))
 
           writer.writerow({
@@ -837,6 +837,7 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
 
