@@ -159,7 +159,7 @@ def leer_eventos(ruta: str) -> pd.DataFrame:
             df[c] = df[c].fillna("").str.strip()
 
     return df
-  def registrar_evento(
+def registrar_evento(
     ruta_eventos: str,
     user_email: str, accion: str, motivo: str,
     lot_id: str, booking_id: str,
@@ -819,6 +819,7 @@ if admin_tab is not None:
             if st.button("Refrescar datos"):
                 df_all = leer_eventos(EVENTOS_CSV)
                 st.info("Datos recargados.")
+
 
 
 
